@@ -64,6 +64,19 @@
 #define CREATE_TRACE_POINTS
 #include "trace/lowmemorykiller.h"
 
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@PSW.AD.Performance.Memory.1139862, 2016/05/31, Add for lowmemorykiller uevent
+#include <linux/module.h>
+
+static struct kobject *lmk_module_kobj = NULL;
+static struct work_struct lowmemorykiller_work;
+static char *lmklowmem[2] = { "LMK=LOWMEM", NULL };
+static int uevent_threshold[6] = {0, 0, 0, 0, }; // 1: 58, 2: 117, 3: 176
+static int last_selected_adj = 0;
+static void lowmemorykiller_uevent(short adj, int index);
+static void lowmemorykiller_work_func(struct work_struct *work);
+#endif /* VENDOR_EDIT */
+
 /* to enable lowmemorykiller */
 static int enable_lmk = 1;
 module_param_named(enable_lmk, enable_lmk, int, 0644);
@@ -84,6 +97,9 @@ static int lowmem_minfree[6] = {
 	16 * 1024,	/* 64MB */
 };
 
+#ifdef VENDOR_EDIT
+static unsigned int almk_totalram_ratio = 6;
+#endif
 static int lowmem_minfree_size = 4;
 static int lmk_fast_run = 1;
 
@@ -192,7 +208,12 @@ static int lmk_vmpressure_notifier(struct notifier_block *nb,
 			total_swapcache_pages();
 		other_free = global_zone_page_state(NR_FREE_PAGES);
 
+#ifdef VENDOR_EDIT
+        if (other_file < totalram_pages/almk_totalram_ratio)
+             atomic_set(&shift_adj, 1);
+#else
 		atomic_set(&shift_adj, 1);
+#endif
 		trace_almk_vmpressure(pressure, other_free, other_file);
 	} else if (pressure >= 90) {
 		if (lowmem_adj_size < array_size)
@@ -453,6 +474,21 @@ static int get_minfree_scalefactor(gfp_t gfp_mask)
 	return max_t(int, 1, mult_frac(100, nr_usable, totalram_pages));
 }
 
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@PSW.AD.Performance.Memory.1139862, 2015/06/17, Modify for 8939/16 5.1 for orphan task
+static void orphan_foreground_task_kill(struct task_struct *task, short adj, short min_score_adj)
+{
+		if (min_score_adj == 0)
+		    return;
+
+		if (task->parent->pid == 1 && adj == 0) {
+            lowmem_print(1, "kill orphan foreground task %s, pid %d, adj %hd, min_score_adj %hd\n",
+                task->comm, task->pid, adj, min_score_adj);
+            send_sig(SIGKILL, task, 0);
+		}
+}
+#endif /* VENDOR_EDIT */
+
 static void mark_lmk_victim(struct task_struct *tsk)
 {
 	struct mm_struct *mm = tsk->mm;
@@ -576,10 +612,32 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 			if (!p)
 				continue;
 		}
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@PSW.AD.Performance.Memory.1139862, 2016/01/06, Add for D status process issue
+		if (p->state & TASK_UNINTERRUPTIBLE) {
+			task_unlock(p);
+			continue;
+		}
+		//resolve kill coredump process, it may continue long time
+		if (p->signal != NULL && (p->signal->flags & SIGNAL_GROUP_COREDUMP) ){
+			task_unlock(p);
+			continue;
+		}
+#endif /* VENDOR_EDIT */
 
 		oom_score_adj = p->signal->oom_score_adj;
 		if (oom_score_adj < min_score_adj) {
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@PSW.AD.Performance.Memory.1139862, 2015/06/17, Modify for 8939/16 5.1 for orphan task
+			tasksize = get_mm_rss(p->mm);
+#endif /* VENDOR_EIDT */
 			task_unlock(p);
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@PSW.AD.Performance.Memory.1139862, 2015/06/17, Modify for 8939/16 5.1 for orphan task
+			if (tasksize > 0) {
+				orphan_foreground_task_kill(p, oom_score_adj, min_score_adj);
+			}
+#endif /* VENDOR_EIDT */
 			continue;
 		}
 		tasksize = get_mm_rss(p->mm);
@@ -653,11 +711,58 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 			(long)(PAGE_SIZE / 1024),
 			sc->gfp_mask);
 
-		if (lowmem_debug_level >= 2 && selected_oom_score_adj == 0) {
+#ifdef VENDOR_EDIT
+/*huacai.zhou@PSW.BSP.Kernel.MM. 2018/01/15, modify for show more meminfo*/
 			show_mem(SHOW_MEM_FILTER_NODES, NULL);
+#endif /*VENDOR_EDIT*/
+
+#ifdef VENDOR_EDIT
+/*Zhenjian.Jiang@PSW.BSP.Kernel.MM. 2019/03/19, modify for show more meminfo when adj <= 300*/
+		if (selected_oom_score_adj <= 300) {
+#else
+		if (lowmem_debug_level >= 2 && selected_oom_score_adj == 0) {
+#endif /*VENDOR_EDIT*/
+#ifndef VENDOR_EDIT
+/*huacai.zhou@PSW.BSP.Kernel.MM. 2018/01/15, modify for show more meminfo*/
+			show_mem(SHOW_MEM_FILTER_NODES, NULL);
+#endif /*VENDOR_EDIT*/
 			show_mem_call_notifiers();
 			dump_tasks(NULL, NULL);
 		}
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@PSW.AD.Performance.Memory.1139862, 2016/05/31, Add for lowmemorykiller uevent
+		if (selected_oom_score_adj == 0) {
+			lowmem_print(1, "Killing %s, adj is %hd, so send uevent to userspace\n",
+					selected->comm, selected_oom_score_adj);
+			schedule_work(&lowmemorykiller_work);
+		} else {
+			for (i = 1; i < 3; i++) {
+				if (selected_oom_score_adj == lowmem_adj[i]) {
+					//uevent must be continuous adj record
+					if (last_selected_adj != selected_oom_score_adj) {
+						last_selected_adj = selected_oom_score_adj;
+						uevent_threshold[i] = 0;
+						break;
+					}
+					uevent_threshold[i]++;
+					if (uevent_threshold[i] == i * 5) {
+						dump_tasks(NULL, NULL);
+						lowmemorykiller_uevent(selected_oom_score_adj, i);
+						uevent_threshold[i] = 0;
+					}
+					break;
+				}
+			}
+		}
+#ifdef CONFIG_OPPO_SPECIAL_BUILD
+//Jiemin.Zhu@PSW.AD.Performance.Memory.1139862, 2017/12/27, Add for print more memory logs in aging test version
+		if (min_score_adj == 0) {
+			lowmem_print(1, "min_score_adj is 0, so send uevent to userspace\n");
+			dump_tasks(NULL, NULL);
+			schedule_work(&lowmemorykiller_work);
+		}
+#endif
+#endif /* VENDOR_EDIT */
 
 		lowmem_deathpending_timeout = jiffies + HZ;
 		rem += selected_tasksize;
@@ -702,6 +807,20 @@ static int lmk_hotplug_callback(struct notifier_block *self,
 	}
 	return NOTIFY_OK;
 }
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@PSW.AD.Performance.Memory.1139862, 2016/05/31, Add for lowmemorykiller uevent
+static void lowmemorykiller_work_func(struct work_struct *work)
+{
+	kobject_uevent_env(lmk_module_kobj, KOBJ_CHANGE, lmklowmem);
+	lowmem_print(1, "lowmemorykiller send uevent: %s\n", lmklowmem[0]);
+}
+
+static void lowmemorykiller_uevent(short adj, int index)
+{
+	lowmem_print(1, "kill adj %hd more than %d times and so send uevent to userspace\n", adj, index * 5);
+	schedule_work(&lowmemorykiller_work);
+}
+#endif /* VENDOR_EDIT */
 
 static struct shrinker lowmem_shrinker = {
 	.scan_objects = lowmem_scan,
@@ -720,6 +839,12 @@ static int __init lowmem_init(void)
 	vmpressure_notifier_register(&lmk_vmpr_nb);
 	if (register_hotmemory_notifier(&lmk_memory_callback_nb))
 		lowmem_print(1, "Registering memory hotplug notifier failed\n");
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@PSW.AD.Performance.Memory.1139862, 2016/05/31, Add for lowmemorykiller uevent
+	lmk_module_kobj = kset_find_obj(module_kset, KBUILD_MODNAME);
+	lowmem_print(1, "kernel obj name %s\n", lmk_module_kobj->name);
+	INIT_WORK(&lowmemorykiller_work, lowmemorykiller_work_func);
+#endif /* VENDOR_EDIT */
 	return 0;
 }
 device_initcall(lowmem_init);
@@ -819,3 +944,6 @@ module_param_array_named(minfree, lowmem_minfree, uint, &lowmem_minfree_size,
 module_param_named(debug_level, lowmem_debug_level, uint, S_IRUGO | S_IWUSR);
 module_param_named(lmk_fast_run, lmk_fast_run, int, S_IRUGO | S_IWUSR);
 
+#ifdef VENDOR_EDIT
+module_param_named(almk_totalram_ratio, almk_totalram_ratio, uint, S_IRUGO | S_IWUSR);
+#endif

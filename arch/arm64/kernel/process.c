@@ -241,6 +241,9 @@ static void show_extra_register_data(struct pt_regs *regs, int nbytes)
 	set_fs(fs);
 }
 
+#ifdef VENDOR_EDIT //yixue.ge@bsp.drv add for dump cpu contex for minidump
+extern void dumpcpuregs(struct pt_regs *pt_regs);
+#endif
 void __show_regs(struct pt_regs *regs)
 {
 	int i, top_reg;
@@ -256,6 +259,9 @@ void __show_regs(struct pt_regs *regs)
 		top_reg = 29;
 	}
 
+#ifdef VENDOR_EDIT //yixue.ge@bsp.drv add for dump cpu contex for minidump
+	dumpcpuregs(regs);
+#endif
 	show_regs_print_info(KERN_DEFAULT);
 	print_symbol("pc : %s\n", regs->pc);
 	print_symbol("lr : %s\n", lr);

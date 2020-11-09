@@ -68,7 +68,7 @@
 
 #define WATCHDOG_TRIGGER_COUNT 2
 
-#define WATCHDOG_DELAY_MS 50000
+#define WATCHDOG_DELAY_MS 5000
 
 #define MODE_SWITCH_DELAY_MS 100
 
@@ -2851,15 +2851,6 @@ static int syna_tcm_resume(struct device *dev)
 	if (!tcm_hcd->in_suspend)
 		return 0;
 
-	retval = pinctrl_select_state(
-			tcm_hcd->ts_pinctrl,
-			tcm_hcd->pinctrl_state_active);
-	if (retval < 0) {
-		LOGE(tcm_hcd->pdev->dev.parent,
-			"%s: Failed to select %s pinstate %d\n",
-			__func__, PINCTRL_STATE_ACTIVE, retval);
-	}
-
 	if (tcm_hcd->host_download_mode) {
 #ifndef WAKEUP_GESTURE
 		syna_tcm_check_hdl(tcm_hcd);
@@ -2949,13 +2940,6 @@ static int syna_tcm_suspend(struct device *dev)
 	if (tcm_hcd->in_suspend || !tcm_hcd->init_okay)
 		return 0;
 
-	if (pinctrl_select_state(
-			tcm_hcd->ts_pinctrl,
-			tcm_hcd->pinctrl_state_suspend))
-		LOGE(tcm_hcd->pdev->dev.parent,
-			"%s: Failed to select %s pinstate\n",
-			__func__, PINCTRL_STATE_RELEASE);
-
 	mutex_lock(&mod_pool.mutex);
 
 	if (!list_empty(&mod_pool.list)) {
@@ -2990,13 +2974,6 @@ static int syna_tcm_early_suspend(struct device *dev)
 
 	if (tcm_hcd->in_suspend || !tcm_hcd->init_okay)
 		return 0;
-
-	if (pinctrl_select_state(
-			tcm_hcd->ts_pinctrl,
-			tcm_hcd->pinctrl_state_suspend))
-		LOGE(tcm_hcd->pdev->dev.parent,
-			"%s: Failed to select %s pinstate\n",
-			__func__, PINCTRL_STATE_RELEASE);
 
 	tcm_hcd->update_watchdog(tcm_hcd, false);
 

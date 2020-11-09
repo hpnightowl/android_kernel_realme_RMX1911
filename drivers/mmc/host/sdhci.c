@@ -83,6 +83,16 @@ static void sdhci_dump_state(struct sdhci_host *host)
 
 void sdhci_dumpregs(struct sdhci_host *host)
 {
+#ifdef VENDOR_EDIT
+//Hexiaosen@PSW.BSP. 2019-11-20 modify for disable sdcard log
+	static int flag = 0;
+
+	if(flag < 5)
+		flag++;
+	else
+		return;
+#endif
+
 	MMC_TRACE(host->mmc,
 		"%s: 0x04=0x%08x 0x06=0x%08x 0x0E=0x%08x 0x30=0x%08x 0x34=0x%08x 0x38=0x%08x\n",
 		__func__,
@@ -1271,6 +1281,19 @@ void sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
 	unsigned long timeout;
 
 	WARN_ON(host->cmd);
+
+#ifdef VENDOR_EDIT
+//yh@bsp, 2015-10-21 Add for special card compatible
+//Guohua.Zhong@BSP.Storage.Sdcard,20180630 modify for use is_fsck_process whitelist "fsck"
+	if(host->mmc->card_stuck_in_programing_status && mmc_card_is_removable(host->mmc))
+	{
+		printk_once(KERN_INFO "%s:card_stuck_in_programing_status cmd:%d\n", mmc_hostname(host->mmc), cmd->opcode );
+
+		cmd->error = -EIO;
+		sdhci_finish_mrq(host, cmd->mrq);
+		return;
+	}
+#endif /* VENDOR_EDIT */
 
 	/* Initially, a command has no error */
 	cmd->error = 0;

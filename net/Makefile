@@ -88,3 +88,8 @@ obj-$(CONFIG_QRTR)		+= qrtr/
 obj-$(CONFIG_NET_NCSI)		+= ncsi/
 obj-$(CONFIG_RMNET_DATA) += rmnet_data/
 obj-$(CONFIG_RMNET_USB) += rmnet_usb/
+#ifdef VENDOR_EDIT
+#Yuan.Huang@PSW.CN.WiFi.Network.internet.1461349, 2018/06/18,
+#Add for WeChat lucky money recognition
+obj-y				+= oppo_nf_hooks/
+#endif /* VENDOR_EDIT */

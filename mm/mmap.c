@@ -45,8 +45,14 @@
 #include <linux/moduleparam.h>
 #include <linux/pkeys.h>
 #include <linux/oom.h>
-#include <linux/sched/mm.h>
+#if defined(VENDOR_EDIT) && defined(CONFIG_OPPO_HEALTHINFO)
+/* Kui.Zhang@TEC.Kernel.Performance, 2019/06/06
+ * collect svm_oom log
+ */
+#include <soc/oppo/oppo_healthinfo.h>
+#endif /*VENDOR_EDIT*/
 
+#include <linux/sched/mm.h>
 #include <linux/uaccess.h>
 #include <asm/cacheflush.h>
 #include <asm/tlb.h>
@@ -999,6 +1005,19 @@ again:
 		}
 		else if (next)
 			vma_gap_update(next);
+#ifdef VNEDOR_EDIT
+		else {
+			/* Kui.Zhang@TEC.Kernel.Performance, 2019/03/13
+			 * reserve area top addr check
+			 */
+			if (BACKUP_ALLOC_FLAG(vma->vm_flags))
+				VM_WARN_ON(mm->reserve_highest_vm_end !=
+						vm_end_gap(vma));
+			else
+				VM_WARN_ON(mm->highest_vm_end !=
+						vm_end_gap(vma));
+		}
+#else
 		else {
 			/*
 			 * If remove_next == 2 we obviously can't
@@ -1021,6 +1040,7 @@ again:
 			 */
 			VM_WARN_ON(mm->highest_vm_end != vm_end_gap(vma));
 		}
+#endif
 	}
 	if (insert && file)
 		uprobe_mmap(insert);
@@ -1581,6 +1601,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 			vm_flags |= VM_NORESERVE;
 	}
 
+
 	addr = mmap_region(file, addr, len, vm_flags, pgoff, uf);
 	if (!IS_ERR_VALUE(addr) &&
 	    ((vm_flags & VM_LOCKED) ||
@@ -1588,6 +1609,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 		*populate = len;
 	return addr;
 }
+
 
 SYSCALL_DEFINE6(mmap_pgoff, unsigned long, addr, unsigned long, len,
 		unsigned long, prot, unsigned long, flags,
@@ -2635,6 +2657,7 @@ static void unmap_region(struct mm_struct *mm,
 	struct vm_area_struct *next = prev ? prev->vm_next : mm->mmap;
 	struct mmu_gather tlb;
 
+
 	lru_add_drain();
 	tlb_gather_mmu(&tlb, mm, start, end);
 	update_hiwater_rss(mm);
@@ -2654,7 +2677,6 @@ detach_vmas_to_be_unmapped(struct mm_struct *mm, struct vm_area_struct *vma,
 {
 	struct vm_area_struct **insertion_point;
 	struct vm_area_struct *tail_vma = NULL;
-
 	insertion_point = (prev ? &prev->vm_next : &mm->mmap);
 	vma->vm_prev = NULL;
 	do {
@@ -3114,6 +3136,7 @@ int vm_brk(unsigned long addr, unsigned long len)
 }
 EXPORT_SYMBOL(vm_brk);
 
+
 /* Release all mmaps. */
 void exit_mmap(struct mm_struct *mm)
 {
@@ -3162,6 +3185,7 @@ void exit_mmap(struct mm_struct *mm)
 	vma = mm->mmap;
 	if (!vma)	/* Can happen if dup_mmap() received an OOM */
 		return;
+
 
 	lru_add_drain();
 	flush_cache_mm(mm);

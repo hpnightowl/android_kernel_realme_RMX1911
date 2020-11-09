@@ -219,10 +219,14 @@ source "drivers/fsi/Kconfig"
 
 source "drivers/tee/Kconfig"
 
+
 source "drivers/mux/Kconfig"
 
 source "drivers/sensors/Kconfig"
 
 source "drivers/esoc/Kconfig"
+
+source "drivers/nfc/pn553-i2c/Kconfig"
+source "drivers/nfc/p73-spi/Kconfig"
 
 endmenu

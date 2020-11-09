@@ -42,6 +42,35 @@
 #include "objsec.h"
 #include "conditional.h"
 
+
+unsigned int selinux_checkreqprot = CONFIG_SECURITY_SELINUX_CHECKREQPROT_VALUE;
+
+static int __init checkreqprot_setup(char *str)
+{
+	unsigned long checkreqprot;
+	if (!kstrtoul(str, 0, &checkreqprot))
+		selinux_checkreqprot = checkreqprot ? 1 : 0;
+	return 1;
+}
+__setup("checkreqprot=", checkreqprot_setup);
+
+static DEFINE_MUTEX(sel_mutex);
+
+/* global data for booleans */
+static struct dentry *bool_dir;
+static int bool_num;
+static char **bool_pending_names;
+static int *bool_pending_values;
+
+/* global data for classes */
+static struct dentry *class_dir;
+static unsigned long last_class_ino;
+
+static char policy_opened;
+
+/* global data for policy capabilities */
+static struct dentry *policycap_dir;
+
 enum sel_inos {
 	SEL_ROOT_INO = 2,
 	SEL_LOAD,	/* load policy */

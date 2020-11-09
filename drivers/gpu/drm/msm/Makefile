@@ -52,6 +52,7 @@ msm_drm-y := \
 	sde/sde_hw_color_proc_v4.o \
 	sde/sde_hw_ad4.o \
 	sde_edid_parser.o \
+	oppo_mm_kevent_fb.o \
 	sde_hdcp_1x.o \
 	sde_hdcp_2x.o
 
@@ -160,6 +161,8 @@ msm_drm-$(CONFIG_DRM_MSM_DSI_STAGING) += dsi-staging/dsi_phy.o \
 				dsi-staging/dsi_display.o \
 				dsi-staging/dsi_panel.o \
 				dsi-staging/dsi_clk_manager.o \
+				dsi-staging/dsi_oppo_support.o \
+				dsi-staging/oppo_display_private_api.o\
 				dsi-staging/dsi_display_test.o
 
 msm_drm-$(CONFIG_DSI_PARSER) += dsi-staging/dsi_parser.o

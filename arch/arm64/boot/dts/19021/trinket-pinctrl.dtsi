@@ -2230,7 +2230,6 @@
 		};
 	};
 };
-<<<<<<< HEAD
 
 /* #ifdef VENDOR_EDIT */
 /* Cong.dai@psw.bsp.tp, 2019/05/11, add for submainboard select */
@@ -2243,10 +2242,6 @@
 			bias-disable;
 		};
 	};
-=======
-/* #ifdef VENDOR_EDIT */
-&pmi632_gpios {
->>>>>>> Realme_SM6125_10.0_202003240200_userdebug_LAST
 //#ifdef VENDOR_EDIT
 /*LiYue@BSP.CHG.Basic, 2019/07/04, add for usb connector temperature check*/
 	gpio1_adc {

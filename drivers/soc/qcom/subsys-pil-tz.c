@@ -782,6 +782,7 @@ static int pil_shutdown_trusted(struct pil_desc *pil)
 		scm_ret = desc.ret[0];
 	}
 
+
 	disable_unprepare_clocks(d->proxy_clks, d->proxy_clk_count);
 	disable_regulators(d, d->proxy_regs, d->proxy_reg_count, false);
 	if (d->bus_client)
@@ -845,6 +846,7 @@ static struct pil_reset_ops pil_ops_trusted = {
 	.proxy_unvote = pil_remove_proxy_vote,
 	.deinit_image = pil_deinit_image_trusted,
 };
+
 
 static void log_failure_reason(const struct pil_tz_data *d)
 {
